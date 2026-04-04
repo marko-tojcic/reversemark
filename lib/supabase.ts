@@ -1,18 +1,14 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { type Database } from '../types/supabase';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { getSupabaseAnonKey, getSupabaseUrl } from './env';
-
-const supabaseUrl = getSupabaseUrl();
-const supabaseAnonKey = getSupabaseAnonKey();
 
 // Create custom storage adapter for the Supabase client
 // Use SecureStore on native platforms, localStorage on web
 const ExpoSecureStoreAdapter = {
   getItem: (key: string) => {
     if (Platform.OS === 'web') {
-      // Use localStorage directly on web to avoid SSR issues
       if (typeof window !== 'undefined') {
         return Promise.resolve(window.localStorage.getItem(key));
       }
@@ -40,12 +36,33 @@ const ExpoSecureStoreAdapter = {
   },
 };
 
-// Initialize the Supabase client
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    storage: ExpoSecureStoreAdapter,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true,
+function createClientInstance(): SupabaseClient<Database> {
+  return createClient<Database>(getSupabaseUrl(), getSupabaseAnonKey(), {
+    auth: {
+      storage: ExpoSecureStoreAdapter,
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true,
+    },
+  });
+}
+
+let _client: SupabaseClient<Database> | null = null;
+
+function getClient(): SupabaseClient<Database> {
+  if (!_client) {
+    _client = createClientInstance();
+  }
+  return _client;
+}
+
+/**
+ * Lazy singleton so missing EAS env does not throw during module import (white screen / instant exit).
+ * First real use (e.g. auth.getSession) still requires valid URL + anon key.
+ */
+export const supabase = new Proxy({} as SupabaseClient<Database>, {
+  get(_target, prop, receiver) {
+    const client = getClient();
+    return Reflect.get(client, prop, receiver);
   },
 });

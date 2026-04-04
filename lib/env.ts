@@ -5,8 +5,19 @@ type SupabaseExtra = {
   supabaseAnonKey?: string;
 };
 
+/** Standalone / EAS builds may expose `extra` on expoConfig, manifest2, or legacy manifest. */
 function extra(): SupabaseExtra {
-  return (Constants.expoConfig?.extra as SupabaseExtra | undefined) ?? {};
+  const c = Constants as {
+    expoConfig?: { extra?: SupabaseExtra };
+    manifest2?: { extra?: SupabaseExtra };
+    manifest?: { extra?: SupabaseExtra };
+  };
+  return (
+    c.expoConfig?.extra ??
+    c.manifest2?.extra ??
+    c.manifest?.extra ??
+    {}
+  );
 }
 
 /**
