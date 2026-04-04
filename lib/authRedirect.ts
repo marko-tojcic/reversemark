@@ -4,18 +4,32 @@ import { Platform } from 'react-native';
 
 /**
  * Deep link / web URL Supabase redirects to after OAuth (must match Auth → URL Configuration).
- * On a physical Android device, `localhost` / `127.0.0.1` in the redirect points at the phone, not your PC
+ * On a physical Android device in dev, `localhost` / `127.0.0.1` points at the phone, not your PC
  * → ERR_CONNECTION_REFUSED. We replace those with a reachable dev host when we can infer it.
+ *
+ * Release APK / production: must use the app scheme only (e.g. marketplacereversed://auth/callback),
+ * never Metro (localhost:8081) — otherwise Google redirects to a URL nothing listens on.
  */
 export function authRedirectPath(path: string): string {
-  const url = Linking.createURL(path);
-  if (Platform.OS === 'web') return url;
+  if (Platform.OS === 'web') {
+    return Linking.createURL(path);
+  }
 
+  const scheme =
+    (typeof Constants.expoConfig?.scheme === 'string' && Constants.expoConfig.scheme) ||
+    'marketplacereversed';
+  const cleanPath = path.replace(/^\//, '');
+
+  if (!__DEV__) {
+    return `${scheme}://${cleanPath}`;
+  }
+
+  const url = Linking.createURL(path, { scheme });
   const host = resolveDevPackagerHostname();
   if (!host) {
     if (__DEV__ && (url.includes('localhost') || url.includes('127.0.0.1'))) {
       console.warn(
-        '[auth] OAuth redirect still uses localhost. Fix: set EXPO_PUBLIC_DEV_LAN_HOST in .env to your PC IP, or run `npx expo start --tunnel`, then add the new redirect URL in Supabase.'
+        '[auth] OAuth redirect still uses localhost. Fix: set EXPO_PUBLIC_DEV_LAN_HOST in .env to your PC IP, or run `npx expo start --tunnel`, then add the redirect URL in Supabase.'
       );
     }
     return url;

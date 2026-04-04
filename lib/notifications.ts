@@ -63,10 +63,24 @@ export async function registerForPushNotifications(): Promise<void> {
       ?.projectId ??
     (Constants as { easConfig?: { projectId?: string } }).easConfig?.projectId;
 
-  const push = projectId
-    ? await Notifications.getExpoPushTokenAsync({ projectId })
-    : await Notifications.getExpoPushTokenAsync();
-  const token = push.data;
+  let token: string;
+  try {
+    const push = projectId
+      ? await Notifications.getExpoPushTokenAsync({ projectId })
+      : await Notifications.getExpoPushTokenAsync();
+    token = push.data;
+  } catch (e) {
+    console.warn(
+      '[notifications] getExpoPushTokenAsync failed:',
+      e instanceof Error ? e.message : e,
+      '— On Android release builds, configure FCM in Expo: https://docs.expo.dev/push-notifications/fcm-credentials/'
+    );
+    return;
+  }
+
+  if (__DEV__) {
+    console.log('[notifications] Expo push token acquired, length:', token?.length ?? 0);
+  }
 
   const {
     data: { user },
@@ -90,6 +104,8 @@ export async function registerForPushNotifications(): Promise<void> {
   );
 
   if (error) {
-    console.warn('[notifications] Failed to save push token', error.message);
+    console.warn('[notifications] Failed to save push token to Supabase:', error.message);
+  } else if (__DEV__) {
+    console.log('[notifications] push_tokens upsert ok for user', user.id);
   }
 }

@@ -30,17 +30,19 @@ Deno.serve(async (req) => {
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const jwt = authHeader.replace('Bearer ', '');
 
-    const admin = createClient(supabaseUrl, serviceKey, {
+    // Resolve caller with anon client + Authorization header (reliable for user access tokens).
+    // admin.auth.getUser(jwt) with service role can return 401 for valid sessions in some runtimes.
+    const supabaseUser = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
       auth: { autoRefreshToken: false, persistSession: false },
     });
-
     const {
       data: { user },
       error: userErr,
-    } = await admin.auth.getUser(jwt);
+    } = await supabaseUser.auth.getUser();
 
     if (userErr || !user) {
       return new Response(JSON.stringify({ error: 'Invalid session' }), {
@@ -48,6 +50,10 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    const admin = createClient(supabaseUrl, serviceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
 
     const body = (await req.json()) as {
       action?: Action;

@@ -18,7 +18,6 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 import { Ionicons } from '@expo/vector-icons';
 import { geoPointToPostgis, GeoPoint } from '../../types/supabase';
@@ -343,6 +342,7 @@ export default function SellScreen() {
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
+        base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -461,15 +461,12 @@ export default function SellScreen() {
             .upload(filePath, fileData, { contentType });
           uploadError = error;
         } else {
-          // For native (iOS/Android), use FileSystem to read as base64
-          // This is more reliable in Expo Go on physical devices
-          const base64 = await FileSystem.readAsStringAsync(photo.uri, {
-            encoding: 'base64',
-          });
-          
-          // Convert base64 to ArrayBuffer using the decode function
-          const arrayBuffer = decode(base64);
-          
+          // Native: use base64 from ImagePicker (avoids expo-file-system/legacy + FilePermissionService issues in release APKs)
+          const b64 = photo.base64;
+          if (!b64) {
+            throw new Error('Could not read image. Try another photo.');
+          }
+          const arrayBuffer = decode(b64);
           const { error } = await supabase.storage
             .from('request_photos')
             .upload(filePath, arrayBuffer, { contentType });

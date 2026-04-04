@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
+import { AppState } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { authRedirectPath } from './authRedirect';
@@ -56,6 +57,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!session?.user) return;
     registerForPushNotifications().catch(() => {});
+  }, [session?.user?.id]);
+
+  // Re-register when returning from background (permission/token can change; helps after OS settings).
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') {
+        registerForPushNotifications().catch(() => {});
+      }
+    });
+    return () => sub.remove();
   }, [session?.user?.id]);
 
   const signIn = async (email: string, password: string) => {

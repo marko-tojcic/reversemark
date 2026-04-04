@@ -7,6 +7,7 @@ import { getUserRating } from '../../lib/ratings';
 import { useAuth } from '../../lib/auth';
 import { deleteAccountViaEdgeFunction } from '../../lib/deleteAccount';
 import * as ImagePicker from 'expo-image-picker';
+import { decode } from 'base64-arraybuffer';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function ProfileScreen() {
@@ -143,6 +144,7 @@ export default function ProfileScreen() {
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
+        base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -151,26 +153,31 @@ export default function ProfileScreen() {
         const selectedImage = result.assets[0];
         
         // Create a unique filename
-        const fileExt = selectedImage.uri.split('.').pop();
+        const fileExt = selectedImage.uri.split('.').pop() || 'jpg';
         const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+        const contentType =
+          fileExt === 'png' ? 'image/png' : fileExt === 'webp' ? 'image/webp' : 'image/jpeg';
         
-        // For web, we need to convert the base64 image to a blob
-        let fileData: Blob | File;
-        
+        let uploadError: { message: string } | null = null;
+
         if (Platform.OS === 'web') {
-          // Convert base64 to blob
           const response = await fetch(selectedImage.uri);
-          fileData = await response.blob();
+          const fileData = await response.blob();
+          const { error } = await supabase.storage
+            .from('avatars')
+            .upload(fileName, fileData, { contentType, upsert: true });
+          uploadError = error;
         } else {
-          // For native, we can use the uri directly
-          const response = await fetch(selectedImage.uri);
-          fileData = await response.blob();
+          const b64 = selectedImage.base64;
+          if (!b64) {
+            throw new Error('Could not read image. Try another photo.');
+          }
+          const body = decode(b64);
+          const { error } = await supabase.storage
+            .from('avatars')
+            .upload(fileName, body, { contentType, upsert: true });
+          uploadError = error;
         }
-        
-        // Upload to Supabase Storage
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('avatars')
-          .upload(fileName, fileData);
 
         if (uploadError) throw uploadError;
         
