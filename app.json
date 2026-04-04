@@ -11,7 +11,7 @@
       "androidMode": "default"
     },
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true
     },
