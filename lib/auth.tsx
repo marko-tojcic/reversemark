@@ -56,7 +56,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!session?.user) return;
-    registerForPushNotifications().catch(() => {});
+    registerForPushNotifications(session).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-register when logged-in user changes; `session` matches that id
   }, [session?.user?.id]);
 
   // Re-register when returning from background (permission/token can change; helps after OS settings).

@@ -3,6 +3,7 @@ import { isRunningInExpoGo } from 'expo';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import type { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 
 if (Platform.OS !== 'web') {
@@ -18,20 +19,25 @@ if (Platform.OS !== 'web') {
 
 /**
  * Request permissions, obtain Expo push token, upsert into `push_tokens`.
+ * Pass `sessionHint` when you already have a session (e.g. from AuthProvider) to avoid a race right after sign-in.
  * Web: no-op (no native push). Simulator: skips (no valid token).
  * Android Expo Go (SDK 53+): no-op — remote push is not supported; use a dev build to test.
  */
-export async function registerForPushNotifications(): Promise<void> {
+export async function registerForPushNotifications(sessionHint?: Session | null): Promise<void> {
   if (Platform.OS === 'web') {
     return;
   }
 
   // Avoid calling getExpoPushTokenAsync — it invokes getDevicePushTokenAsync which logs a hard error on Android Expo Go.
   if (Platform.OS === 'android' && isRunningInExpoGo()) {
+    console.warn(
+      '[notifications] Remote push is disabled in Android Expo Go (SDK 53+). Use an EAS dev build or release to register a token.'
+    );
     return;
   }
 
   if (!Device.isDevice) {
+    console.warn('[notifications] Push tokens are not available on simulators — use a physical device.');
     return;
   }
 
@@ -42,6 +48,9 @@ export async function registerForPushNotifications(): Promise<void> {
     finalStatus = status;
   }
   if (finalStatus !== 'granted') {
+    console.warn(
+      '[notifications] Notification permission not granted — push token will not be saved. Enable notifications in system settings for this app.'
+    );
     return;
   }
 
@@ -78,15 +87,22 @@ export async function registerForPushNotifications(): Promise<void> {
     return;
   }
 
-  if (__DEV__) {
-    console.log('[notifications] Expo push token acquired, length:', token?.length ?? 0);
-  }
+  console.log('[notifications] Expo push token acquired, length:', token?.length ?? 0);
 
-  const {
-    data: { user },
-    error: userErr,
-  } = await supabase.auth.getUser();
-  if (userErr || !user) {
+  let user = sessionHint?.user;
+  if (!user) {
+    const {
+      data: { session },
+      error: sessionErr,
+    } = await supabase.auth.getSession();
+    if (sessionErr) {
+      console.warn('[notifications] getSession failed:', sessionErr.message);
+      return;
+    }
+    user = session?.user;
+  }
+  if (!user) {
+    console.warn('[notifications] Cannot save push token: no Supabase session (sign in first).');
     return;
   }
 
@@ -104,8 +120,8 @@ export async function registerForPushNotifications(): Promise<void> {
   );
 
   if (error) {
-    console.warn('[notifications] Failed to save push token to Supabase:', error.message);
-  } else if (__DEV__) {
-    console.log('[notifications] push_tokens upsert ok for user', user.id);
+    console.warn('[notifications] Failed to save push token to Supabase:', error.message, error);
+  } else {
+    console.log('[notifications] push_tokens saved for user', user.id);
   }
 }

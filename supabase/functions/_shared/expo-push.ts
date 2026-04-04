@@ -4,6 +4,15 @@ const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
 export type PushData = Record<string, string>;
 
+export type SendPushResult = {
+  sent: number;
+  errors: string[];
+  /** True when `userId` has no rows in `push_tokens` — Expo was never called. */
+  noRecipientTokens?: boolean;
+};
+
+type ExpoPushTicket = { status: string; message?: string; details?: { error?: string } };
+
 /**
  * Load tokens for a user and send via Expo Push API (minimal batching: one request per chunk).
  */
@@ -13,7 +22,7 @@ export async function sendPushNotification(
   title: string,
   body: string,
   data: PushData
-): Promise<{ sent: number; errors: string[] }> {
+): Promise<SendPushResult> {
   const { data: rows, error } = await admin
     .from('push_tokens')
     .select('token')
@@ -25,7 +34,7 @@ export async function sendPushNotification(
 
   const tokens = (rows ?? []).map((r) => r.token).filter(Boolean);
   if (tokens.length === 0) {
-    return { sent: 0, errors: [] };
+    return { sent: 0, errors: [], noRecipientTokens: true };
   }
 
   const dataStrings: Record<string, string> = {};
@@ -59,7 +68,7 @@ export async function sendPushNotification(
   });
 
   const json = (await res.json().catch(() => ({}))) as {
-    data?: Array<{ status: string; message?: string }>;
+    data?: ExpoPushTicket[];
     errors?: unknown;
   };
 
@@ -67,7 +76,14 @@ export async function sendPushNotification(
     return { sent: 0, errors: [JSON.stringify(json)] };
   }
 
-  const ok =
-    Array.isArray(json.data) ? json.data.filter((d) => d.status === 'ok').length : tokens.length;
-  return { sent: ok, errors: [] };
+  const tickets = Array.isArray(json.data) ? json.data : [];
+  const ticketErrors: string[] = [];
+  for (const t of tickets) {
+    if (t.status === 'error') {
+      const detail = t.details?.error ? ` (${t.details.error})` : '';
+      ticketErrors.push((t.message ?? 'unknown') + detail);
+    }
+  }
+  const sent = tickets.filter((d) => d.status === 'ok').length;
+  return { sent, errors: ticketErrors };
 }
