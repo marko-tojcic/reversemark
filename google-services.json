@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "133221600498",
+    "project_id": "reversemarketplacee",
+    "storage_bucket": "reversemarketplacee.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:133221600498:android:ef3d96337f222fb435546b",
+        "android_client_info": {
+          "package_name": "com.truckslucks.MarketplaceReversed"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCTQSH6SepIigobVlT_j7sXBOPgXC5-COw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

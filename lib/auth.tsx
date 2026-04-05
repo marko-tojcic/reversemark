@@ -56,16 +56,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!session?.user) return;
-    registerForPushNotifications(session).catch(() => {});
+    registerForPushNotifications(session).then((result) => {
+      if (!result.ok) {
+        console.warn('[auth] Push registration failed:', result.reason);
+      }
+    }).catch((e) => {
+      console.warn('[auth] Push registration threw:', e);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-register when logged-in user changes; `session` matches that id
   }, [session?.user?.id]);
 
-  // Re-register when returning from background (permission/token can change; helps after OS settings).
   useEffect(() => {
     if (!session?.user?.id) return;
     const sub = AppState.addEventListener('change', (next) => {
       if (next === 'active') {
-        registerForPushNotifications().catch(() => {});
+        registerForPushNotifications().then((result) => {
+          if (!result.ok) {
+            console.warn('[auth] Push re-registration failed:', result.reason);
+          }
+        }).catch(() => {});
       }
     });
     return () => sub.remove();
